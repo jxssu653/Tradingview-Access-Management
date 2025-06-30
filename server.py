@@ -876,10 +876,16 @@ def generate_key():
 @app.route('/agent/remove-access/<username>', methods=['DELETE'])
 def remove_user_access(username):
   try:
+    global key_generation_count
+    
     if username not in claimed_users:
       return json.dumps({'errorMessage': 'User not found'}), 404, {
         'Content-Type': 'application/json; charset=utf-8'
       }
+    
+    # Get the user's activation key before removing
+    user_data = claimed_users[username]
+    activation_key = user_data['key']
     
     # Remove access using TradingView API
     tv = tradingview()
@@ -890,10 +896,18 @@ def remove_user_access(username):
       if access['hasAccess']:
         tv.remove_access(access)
     
+    # Reset the activation key - mark it as unused so it can be used again
+    if activation_key in activation_keys:
+      activation_keys[activation_key]['used'] = False
+    
     # Remove from claimed users
     del claimed_users[username]
     
-    return json.dumps({'success': True}), 200, {
+    # Increase the key generation limit by 1 (reset one key usage)
+    if key_generation_count > 0:
+      key_generation_count -= 1
+    
+    return json.dumps({'success': True, 'message': 'Access removed and key reset successfully'}), 200, {
       'Content-Type': 'application/json; charset=utf-8'
     }
     
