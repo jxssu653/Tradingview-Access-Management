@@ -1,3 +1,4 @@
+
 from flask import Flask, request
 from tradingview import tradingview
 import json
@@ -9,8 +10,9 @@ app = Flask('')
 CORS(app)
 
 # In-memory storage for activation keys and claimed users
-activation_keys = {}  # {key: {email, name, timestamp, used}}
+activation_keys = {}  # {key: {email, name, timestamp, used, cancelled, agent_key}}
 claimed_users = {}   # {username: {name, email, key, timestamp}}
+agent_keys = {}      # {agent_key: {name, email, timestamp, key_limit, keys_generated}}
 
 # Admin configuration
 admin_config = {
@@ -107,6 +109,25 @@ def access(username):
     }
 
 
+@app.route('/validate-agent-key/<key>', methods=['GET'])
+def validate_agent_key(key):
+  try:
+    if key not in agent_keys:
+      return json.dumps({'valid': False, 'message': 'Invalid agent key'}), 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    return json.dumps({'valid': True, 'name': agent_keys[key]['name']}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
 @app.route('/agent')
 def agent():
   return '''
@@ -156,8 +177,44 @@ def agent():
             font-size: 16px;
         }
 
+        .login-section {
+            padding: 40px;
+            text-align: center;
+        }
+
         .content {
             padding: 40px;
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        input[type="text"], input[type="email"], input[type="password"] {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .actions {
@@ -186,6 +243,25 @@ def agent():
         .generate-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(86, 171, 47, 0.3);
+        }
+
+        .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
 
         .stats {
@@ -316,10 +392,28 @@ def agent():
             font-size: 12px;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-right: 5px;
         }
 
         .remove-btn:hover {
             background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .edit-btn {
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 5px;
+        }
+
+        .edit-btn:hover {
+            background: #e0a800;
             transform: translateY(-1px);
         }
 
@@ -368,32 +462,6 @@ def agent():
         .modal p {
             color: #666;
             margin-bottom: 30px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 12px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .modal-actions {
@@ -471,6 +539,27 @@ def agent():
         .copy-btn:hover:not(:disabled) {
             background: #218838;
         }
+
+        .result {
+            margin-top: 25px;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            display: none;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -480,7 +569,23 @@ def agent():
             <p>Manage activation keys and user access</p>
         </div>
 
-        <div class="content">
+        <!-- Agent Key Login -->
+        <div class="login-section" id="loginSection">
+            <h2>Agent Access</h2>
+            <p>Enter your agent key to access the management panel</p>
+            
+            <div class="form-group">
+                <label for="agentKey">Agent Key</label>
+                <input type="password" id="agentKey" placeholder="Enter your agent key">
+            </div>
+            
+            <button class="login-btn" onclick="validateAgentKey()">Access Panel</button>
+            
+            <div id="loginResult" class="result"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content" id="mainContent">
             <div class="actions">
                 <div class="stats">
                     <div class="stat-card">
@@ -494,6 +599,10 @@ def agent():
                     <div class="stat-card">
                         <div class="stat-number" id="claimedUsers">0</div>
                         <div class="stat-label">Claimed Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="remainingKeys">0</div>
+                        <div class="stat-label">Keys Remaining</div>
                     </div>
                 </div>
                 <button class="generate-btn" onclick="showGenerateModal()">Generate Key</button>
@@ -563,6 +672,29 @@ def agent():
         </div>
     </div>
 
+    <!-- Edit Key Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h2>Edit Key Details</h2>
+            <p>Update the name and email for this activation key</p>
+
+            <div class="form-group">
+                <label for="editName">Name</label>
+                <input type="text" id="editName" placeholder="Enter full name">
+            </div>
+
+            <div class="form-group">
+                <label for="editEmail">Email</label>
+                <input type="email" id="editEmail" placeholder="Enter email address">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="hideEditModal()">Cancel</button>
+                <button class="btn-confirm" onclick="updateKeyDetails()">Update Details</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Key Generated Modal -->
     <div id="keyGeneratedModal" class="modal">
         <div class="modal-content">
@@ -581,15 +713,55 @@ def agent():
     <script>
         const API_BASE = window.location.origin;
         let generatedKey = '';
+        let currentAgentKey = '';
+        let editingKey = '';
 
-        // Load data on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadData();
-        });
+        async function validateAgentKey() {
+            const key = document.getElementById('agentKey').value.trim();
+            
+            if (!key) {
+                showLoginResult('Please enter your agent key', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/validate-agent-key/${encodeURIComponent(key)}`);
+                const data = await response.json();
+
+                if (response.ok && data.valid) {
+                    currentAgentKey = key;
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('mainContent').style.display = 'block';
+                    loadData();
+                    showLoginResult(`Welcome, ${data.name}!`, 'success');
+                } else {
+                    showLoginResult(data.message || 'Invalid agent key', 'error');
+                }
+            } catch (error) {
+                showLoginResult(`Network error: ${error.message}`, 'error');
+            }
+        }
+
+        function showLoginResult(message, type = 'info') {
+            const resultDiv = document.getElementById('loginResult');
+            resultDiv.innerHTML = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 3000);
+        }
 
         async function loadData() {
+            if (!currentAgentKey) return;
+
             try {
-                const response = await fetch(`${API_BASE}/agent/data`);
+                const response = await fetch(`${API_BASE}/agent/data`, {
+                    headers: {
+                        'Agent-Key': currentAgentKey
+                    }
+                });
                 const data = await response.json();
 
                 updateStats(data);
@@ -604,33 +776,8 @@ def agent():
             document.getElementById('totalKeys').textContent = Object.keys(data.keys).length;
             document.getElementById('activeKeys').textContent = Object.values(data.keys).filter(k => !k.used && !k.cancelled).length;
             document.getElementById('claimedUsers').textContent = Object.keys(data.users).length;
+            document.getElementById('remainingKeys').textContent = Math.max(0, data.remaining_keys || 0);
 
-            // Update the stats display to show limit information
-            const statsContainer = document.querySelector('.stats');
-            const limitCard = document.createElement('div');
-            limitCard.className = 'stat-card';
-
-            // Calculate remaining keys excluding cancelled ones
-            const totalKeys = Object.keys(data.keys).length;
-            const cancelledKeys = Object.values(data.keys).filter(k => k.cancelled).length;
-            const usedKeys = Object.values(data.keys).filter(k => k.used && !k.cancelled).length;
-            const remainingKeys = data.key_limit - (totalKeys - cancelledKeys);
-
-            limitCard.innerHTML = `
-                <div class="stat-number">${Math.max(0, remainingKeys)}</div>
-                <div class="stat-label">Keys Remaining</div>
-            `;
-
-            // Remove existing limit card if present
-            const existingLimitCard = statsContainer.querySelector('.limit-card');
-            if (existingLimitCard) {
-                existingLimitCard.remove();
-            }
-
-            limitCard.classList.add('limit-card');
-            statsContainer.appendChild(limitCard);
-
-            // Show warning if close to limit
             if (data.remaining_keys <= 2 && data.remaining_keys > 0) {
                 showLimitWarning(`Warning: Only ${data.remaining_keys} key(s) remaining!`);
             }
@@ -665,7 +812,9 @@ def agent():
             const tbody = document.getElementById('keysTableBody');
             tbody.innerHTML = '';
 
-            if (Object.keys(keys).length === 0) {
+            const agentKeys = Object.entries(keys).filter(([key, data]) => data.agent_key === currentAgentKey);
+
+            if (agentKeys.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="6" style="text-align: center; padding: 40px; color: #999;">
@@ -676,7 +825,7 @@ def agent():
                 return;
             }
 
-            Object.entries(keys).forEach(([key, data]) => {
+            agentKeys.forEach(([key, data]) => {
                 const row = document.createElement('tr');
                 let status = 'active';
                 let statusText = 'Active';
@@ -699,7 +848,10 @@ def agent():
                     <td class="${emailClass}">${data.email}</td>
                     <td><span class="status-${status}">${statusText}</span></td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
-                    <td><button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy Key</button></td>
+                    <td>
+                        <button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy</button>
+                        <button class="edit-btn" onclick="editKeyDetails('${key}')">Edit</button>
+                    </td>
                 `;
                 tbody.appendChild(row);
             });
@@ -753,6 +905,70 @@ def agent():
             document.getElementById('keyGeneratedModal').style.display = 'none';
         }
 
+        function editKeyDetails(key) {
+            editingKey = key;
+            
+            // Get current key data
+            fetch(`${API_BASE}/agent/data`, {
+                headers: {
+                    'Agent-Key': currentAgentKey
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const keyData = data.keys[key];
+                if (keyData) {
+                    document.getElementById('editName').value = keyData.name;
+                    document.getElementById('editEmail').value = keyData.email;
+                    document.getElementById('editModal').style.display = 'block';
+                }
+            });
+        }
+
+        function hideEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            document.getElementById('editName').value = '';
+            document.getElementById('editEmail').value = '';
+            editingKey = '';
+        }
+
+        async function updateKeyDetails() {
+            const name = document.getElementById('editName').value.trim();
+            const email = document.getElementById('editEmail').value.trim();
+
+            if (!name || !email) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/agent/edit-key`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Agent-Key': currentAgentKey
+                    },
+                    body: JSON.stringify({ 
+                        key: editingKey,
+                        name: name, 
+                        email: email 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    hideEditModal();
+                    loadData();
+                    alert('Key details updated successfully!');
+                } else {
+                    alert(`Error: ${data.errorMessage}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
+        }
+
         async function generateKey() {
             const name = document.getElementById('userName').value.trim();
             const email = document.getElementById('userEmail').value.trim();
@@ -767,6 +983,7 @@ def agent():
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Agent-Key': currentAgentKey
                     },
                     body: JSON.stringify({ name, email })
                 });
@@ -776,10 +993,9 @@ def agent():
                 if (response.ok) {
                     hideGenerateModal();
                     showKeyGeneratedModal(data.key);
-                    loadData(); // Reload data
+                    loadData();
                 } else {
                     if (data.errorMessage && data.errorMessage.includes('limit reached')) {
-                        // Show limit reached alert
                         const alertDiv = document.createElement('div');
                         alertDiv.style.cssText = `
                             position: fixed;
@@ -856,14 +1072,17 @@ def agent():
 
             try {
                 const response = await fetch(`${API_BASE}/agent/remove-access/${encodeURIComponent(username)}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Agent-Key': currentAgentKey
+                    }
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
                     alert('Access removed successfully');
-                    loadData(); // Reload data
+                    loadData();
                 } else {
                     alert(`Error: ${data.errorMessage}`);
                 }
@@ -876,12 +1095,16 @@ def agent():
         window.onclick = function(event) {
             const generateModal = document.getElementById('generateModal');
             const keyGeneratedModal = document.getElementById('keyGeneratedModal');
+            const editModal = document.getElementById('editModal');
 
             if (event.target === generateModal) {
                 hideGenerateModal();
             }
             if (event.target === keyGeneratedModal) {
                 hideKeyGeneratedModal();
+            }
+            if (event.target === editModal) {
+                hideEditModal();
             }
         }
     </script>
@@ -893,12 +1116,24 @@ def agent():
 @app.route('/agent/data', methods=['GET'])
 def agent_data():
   try:
+    agent_key = request.headers.get('Agent-Key')
+    
+    if not agent_key or agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    agent_info = agent_keys[agent_key]
+    
+    # Filter keys for this agent
+    agent_activation_keys = {k: v for k, v in activation_keys.items() if v.get('agent_key') == agent_key}
+    
     return json.dumps({
-      'keys': activation_keys,
+      'keys': agent_activation_keys,
       'users': claimed_users,
-      'key_limit': admin_config['key_creation_limit'],
-      'keys_generated': key_generation_count,
-      'remaining_keys': admin_config['key_creation_limit'] - key_generation_count
+      'key_limit': agent_info.get('key_limit', 10),
+      'keys_generated': agent_info.get('keys_generated', 0),
+      'remaining_keys': agent_info.get('key_limit', 10) - agent_info.get('keys_generated', 0)
     }), 200, {
       'Content-Type': 'application/json; charset=utf-8'
     }
@@ -912,11 +1147,18 @@ def agent_data():
 @app.route('/agent/generate-key', methods=['POST'])
 def generate_key():
   try:
-    global key_generation_count
+    agent_key = request.headers.get('Agent-Key')
+    
+    if not agent_key or agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
 
-    # Check if limit is reached
-    if key_generation_count >= admin_config['key_creation_limit']:
-      return json.dumps({'errorMessage': f'Key generation limit reached ({admin_config["key_creation_limit"]}). Contact admin for more keys.'}), 400, {
+    agent_info = agent_keys[agent_key]
+    
+    # Check if limit is reached for this agent
+    if agent_info['keys_generated'] >= agent_info['key_limit']:
+      return json.dumps({'errorMessage': f'Key generation limit reached ({agent_info["key_limit"]}). Contact admin for more keys.'}), 400, {
         'Content-Type': 'application/json; charset=utf-8'
       }
 
@@ -938,13 +1180,60 @@ def generate_key():
       'email': email,
       'timestamp': time.time(),
       'used': False,
-      'cancelled': False
+      'cancelled': False,
+      'agent_key': agent_key
     }
 
-    # Increment key generation count
-    key_generation_count += 1
+    # Increment key generation count for this agent
+    agent_keys[agent_key]['keys_generated'] += 1
 
     return json.dumps({'key': key}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/agent/edit-key', methods=['POST'])
+def edit_key():
+  try:
+    agent_key = request.headers.get('Agent-Key')
+    
+    if not agent_key or agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    jsonPayload = request.json
+    key = jsonPayload.get('key')
+    name = jsonPayload.get('name')
+    email = jsonPayload.get('email')
+
+    if not key or not name or not email:
+      return json.dumps({'errorMessage': 'Key, name and email are required'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    if key not in activation_keys:
+      return json.dumps({'errorMessage': 'Invalid activation key'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Check if this key belongs to the agent
+    if activation_keys[key].get('agent_key') != agent_key:
+      return json.dumps({'errorMessage': 'Unauthorized to edit this key'}), 403, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Update key details
+    activation_keys[key]['name'] = name
+    activation_keys[key]['email'] = email
+
+    return json.dumps({'success': True}), 200, {
       'Content-Type': 'application/json; charset=utf-8'
     }
 
@@ -958,7 +1247,12 @@ def generate_key():
 @app.route('/agent/remove-access/<username>', methods=['DELETE'])
 def remove_user_access(username):
   try:
-    global key_generation_count
+    agent_key = request.headers.get('Agent-Key')
+    
+    if not agent_key or agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
 
     if username not in claimed_users:
       return json.dumps({'errorMessage': 'User not found'}), 404, {
@@ -969,25 +1263,31 @@ def remove_user_access(username):
     user_data = claimed_users[username]
     activation_key = user_data['key']
 
+    # Check if this key belongs to the agent
+    if activation_keys[activation_key].get('agent_key') != agent_key:
+      return json.dumps({'errorMessage': 'Unauthorized to remove this user'}), 403, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
     # Remove access using TradingView API
     tv = tradingview()
-    pine_ids = ['PUB;a34266bd1a4f46c4a6b541b7922c026c']  # Hardcoded Pine ID
+    pine_ids = ['PUB;2a98f89c2f96420a9bac21052e0c94cf']
 
     for pine_id in pine_ids:
       access = tv.get_access_details(username, pine_id)
       if access['hasAccess']:
         tv.remove_access(access)
 
-    # Mark the activation key as cancelled instead of resetting it
+    # Mark the activation key as cancelled
     if activation_key in activation_keys:
       activation_keys[activation_key]['cancelled'] = True
 
     # Remove from claimed users
     del claimed_users[username]
 
-    # Increase the key generation limit by 1 (reset one key usage)
-    if key_generation_count > 0:
-      key_generation_count -= 1
+    # Decrease the key generation count for this agent
+    if agent_keys[agent_key]['keys_generated'] > 0:
+      agent_keys[agent_key]['keys_generated'] -= 1
 
     return json.dumps({'success': True, 'message': 'Access removed and key reset successfully'}), 200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1054,7 +1354,7 @@ def admin():
         }
 
         .container {
-            max-width: 800px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 20px;
@@ -1092,6 +1392,34 @@ def admin():
             display: none;
         }
 
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .create-agent-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .create-agent-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        }
+
         .form-group {
             margin-bottom: 25px;
             text-align: left;
@@ -1105,7 +1433,7 @@ def admin():
             font-size: 14px;
         }
 
-        input[type="text"], input[type="password"], input[type="number"] {
+        input[type="text"], input[type="password"], input[type="number"], input[type="email"] {
             width: 100%;
             padding: 15px 20px;
             border: 2px solid #e1e5e9;
@@ -1115,7 +1443,7 @@ def admin():
             background: #f8f9fa;
         }
 
-        input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus {
+        input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus, input[type="email"]:focus {
             outline: none;
             border-color: #667eea;
             background: white;
@@ -1179,6 +1507,49 @@ def admin():
             letter-spacing: 0.5px;
         }
 
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e1e5e9;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
         .result {
             margin-top: 25px;
             padding: 20px;
@@ -1207,13 +1578,193 @@ def admin():
             padding: 10px 20px;
             font-size: 14px;
         }
+
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-right: 5px;
+            transition: background 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+        }
+
+        .edit-btn {
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 5px;
+        }
+
+        .edit-btn:hover {
+            background: #e0a800;
+        }
+
+        .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .remove-btn:hover {
+            background: #c82333;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 500px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { transform: translate(-50%, -60%); opacity: 0; }
+            to { transform: translate(-50%, -50%); opacity: 1; }
+        }
+
+        .modal h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .modal p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-confirm {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-cancel:hover, .btn-confirm:hover {
+            transform: translateY(-1px);
+        }
+
+        .key-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+            margin-top: 15px;
+            border: 2px solid #e1e5e9;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-used {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-cancelled {
+            background: #fff3cd;
+            color: #856404;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .cancelled-key {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .cancelled-name {
+            text-decoration: line-through;
+            opacity: 0.6;
+            color: #6c757d;
+        }
+
+        .cancelled-email {
+            text-decoration: line-through;
+            opacity: 0.6;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Admin Panel</h1>
-            <p>Manage key creation limits</p>
+            <p>Manage agents, keys, and access control</p>
         </div>
 
         <div class="content">
@@ -1231,35 +1782,179 @@ def admin():
                 <button type="button" class="logout-btn" onclick="logout()">Logout</button>
                 <div style="clear: both; margin-bottom: 30px;"></div>
 
-                <div class="stats" id="stats">
-                    <div class="stat-card">
-                        <div class="stat-number" id="currentLimit">0</div>
-                        <div class="stat-label">Current Limit</div>
+                <div class="actions">
+                    <div class="stats" id="stats">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalAgents">0</div>
+                            <div class="stat-label">Total Agents</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalKeys">0</div>
+                            <div class="stat-label">Total Keys</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalUsers">0</div>
+                            <div class="stat-label">Claimed Users</div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="keysGenerated">0</div>
-                        <div class="stat-label">Keys Generated</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="remainingKeys">0</div>
-                        <div class="stat-label">Remaining Keys</div>
+                    <button type="button" class="create-agent-btn" onclick="showCreateAgentModal()">Create Agent</button>
+                </div>
+
+                <div class="section">
+                    <h2 class="section-title">Agents</h2>
+                    <div class="table-container">
+                        <table id="agentsTable">
+                            <thead>
+                                <tr>
+                                    <th>Agent Key</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Key Limit</th>
+                                    <th>Keys Generated</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agentsTableBody">
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="newLimit">Set New Key Creation Limit</label>
-                    <input type="number" id="newLimit" placeholder="Enter new limit (e.g., 50)" min="1">
+                <div class="section">
+                    <h2 class="section-title">All Activation Keys</h2>
+                    <div class="table-container">
+                        <table id="allKeysTable">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Agent</th>
+                                    <th>Generated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allKeysTableBody">
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <button type="button" class="update-btn" onclick="updateLimit()">Update Limit</button>
+                <div class="section">
+                    <h2 class="section-title">All Claimed Users</h2>
+                    <div class="table-container">
+                        <table id="allUsersTable">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Claimed Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allUsersTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <div id="result" class="result"></div>
         </div>
     </div>
 
+    <!-- Create Agent Modal -->
+    <div id="createAgentModal" class="modal">
+        <div class="modal-content">
+            <h2>Create New Agent</h2>
+            <p>Create a new agent account with activation key</p>
+
+            <div class="form-group">
+                <label for="agentName">Agent Name</label>
+                <input type="text" id="agentName" placeholder="Enter agent name">
+            </div>
+
+            <div class="form-group">
+                <label for="agentEmail">Agent Email</label>
+                <input type="email" id="agentEmail" placeholder="Enter agent email">
+            </div>
+
+            <div class="form-group">
+                <label for="agentKeyLimit">Key Limit</label>
+                <input type="number" id="agentKeyLimit" placeholder="Enter key generation limit" value="10" min="1">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="hideCreateAgentModal()">Cancel</button>
+                <button class="btn-confirm" onclick="createAgent()">Create Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Created Modal -->
+    <div id="agentCreatedModal" class="modal">
+        <div class="modal-content">
+            <h2>Agent Created Successfully!</h2>
+            <p>Share this agent key with the new agent:</p>
+
+            <div class="key-display" id="agentKeyDisplay"></div>
+            <button class="copy-btn" onclick="copyAgentKey()">Copy Agent Key</button>
+
+            <div class="modal-actions">
+                <button class="btn-confirm" onclick="hideAgentCreatedModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Key Limit Modal -->
+    <div id="editLimitModal" class="modal">
+        <div class="modal-content">
+            <h2>Edit Key Limit</h2>
+            <p>Set the key generation limit for this agent</p>
+
+            <div class="form-group">
+                <label for="newKeyLimit">New Key Limit</label>
+                <input type="number" id="newKeyLimit" placeholder="Enter new limit" min="1">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="hideEditLimitModal()">Cancel</button>
+                <button class="btn-confirm" onclick="updateKeyLimit()">Update Limit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Key Details Modal -->
+    <div id="editKeyModal" class="modal">
+        <div class="modal-content">
+            <h2>Edit Key Details</h2>
+            <p>Update the name and email for this activation key</p>
+
+            <div class="form-group">
+                <label for="editKeyName">Name</label>
+                <input type="text" id="editKeyName" placeholder="Enter full name">
+            </div>
+
+            <div class="form-group">
+                <label for="editKeyEmail">Email</label>
+                <input type="email" id="editKeyEmail" placeholder="Enter email address">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="hideEditKeyModal()">Cancel</button>
+                <button class="btn-confirm" onclick="updateKeyDetails()">Update Details</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = window.location.origin;
+        let createdAgentKey = '';
+        let editingAgentKey = '';
+        let editingKey = '';
 
         // Check if already logged in
         if (sessionStorage.getItem('adminLoggedIn') === 'true') {
@@ -1307,49 +2002,356 @@ def admin():
         function showAdminPanel() {
             document.getElementById('loginForm').style.display = 'none';
             document.getElementById('adminPanel').style.display = 'block';
-            loadStats();
+            loadAdminData();
         }
 
-        function loadStats() {
-            fetch(`${API_BASE}/admin/stats`)
+        function loadAdminData() {
+            fetch(`${API_BASE}/admin/data`)
             .then(response => response.json())
             .then(data => {
-                document.getElementById('currentLimit').textContent = data.current_limit;
-                document.getElementById('keysGenerated').textContent = data.keys_generated;
-                document.getElementById('remainingKeys').textContent = data.remaining_keys;
-                document.getElementById('newLimit').value = data.current_limit;
+                updateAdminStats(data);
+                updateAgentsTable(data.agents);
+                updateAllKeysTable(data.keys);
+                updateAllUsersTable(data.users);
             })
             .catch(error => {
-                console.error('Error loading stats:', error);
+                console.error('Error loading admin data:', error);
             });
         }
 
-        function updateLimit() {
-            const newLimit = parseInt(document.getElementById('newLimit').value);
+        function updateAdminStats(data) {
+            document.getElementById('totalAgents').textContent = Object.keys(data.agents).length;
+            document.getElementById('totalKeys').textContent = Object.keys(data.keys).length;
+            document.getElementById('totalUsers').textContent = Object.keys(data.users).length;
+        }
 
-            if (!newLimit || newLimit < 1) {
-                showResult('Please enter a valid limit (minimum 1)', 'error');
+        function updateAgentsTable(agents) {
+            const tbody = document.getElementById('agentsTableBody');
+            tbody.innerHTML = '';
+
+            if (Object.keys(agents).length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
+                            No agents created yet
+                        </td>
+                    </tr>
+                `;
                 return;
             }
 
-            fetch(`${API_BASE}/admin/update-limit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ limit: newLimit })
-            })
+            Object.entries(agents).forEach(([key, data]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><code>${key.substring(0, 12)}...</code></td>
+                    <td>${data.name}</td>
+                    <td>${data.email}</td>
+                    <td>${data.key_limit}</td>
+                    <td>${data.keys_generated}</td>
+                    <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
+                    <td>
+                        <button class="copy-btn" onclick="copyAgentKeyFromTable('${key}')">Copy Key</button>
+                        <button class="edit-btn" onclick="editAgentKeyLimit('${key}')">Edit Limit</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateAllKeysTable(keys) {
+            const tbody = document.getElementById('allKeysTableBody');
+            tbody.innerHTML = '';
+
+            if (Object.keys(keys).length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
+                            No activation keys generated yet
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            Object.entries(keys).forEach(([key, data]) => {
+                const row = document.createElement('tr');
+                let status = 'active';
+                let statusText = 'Active';
+
+                if (data.used) {
+                    status = 'used';
+                    statusText = 'Used';
+                } else if (data.cancelled) {
+                    status = 'cancelled';
+                    statusText = 'Cancelled';
+                }
+
+                const keyClass = data.cancelled ? 'cancelled-key' : '';
+                const nameClass = data.cancelled ? 'cancelled-name' : '';
+                const emailClass = data.cancelled ? 'cancelled-email' : '';
+
+                row.innerHTML = `
+                    <td><code class="${keyClass}">${key.substring(0, 12)}...</code></td>
+                    <td class="${nameClass}">${data.name}</td>
+                    <td class="${emailClass}">${data.email}</td>
+                    <td><span class="status-${status}">${statusText}</span></td>
+                    <td><code>${(data.agent_key || 'N/A').substring(0, 8)}...</code></td>
+                    <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
+                    <td>
+                        <button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy</button>
+                        <button class="edit-btn" onclick="editKeyDetails('${key}')">Edit</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateAllUsersTable(users) {
+            const tbody = document.getElementById('allUsersTableBody');
+            tbody.innerHTML = '';
+
+            if (Object.keys(users).length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
+                            No users have claimed access yet
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            Object.entries(users).forEach(([username, data]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${username}</strong></td>
+                    <td>${data.name}</td>
+                    <td>${data.email}</td>
+                    <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
+                    <td><button class="remove-btn" onclick="removeUserAccessAdmin('${username}')">Remove Access</button></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function showCreateAgentModal() {
+            document.getElementById('createAgentModal').style.display = 'block';
+        }
+
+        function hideCreateAgentModal() {
+            document.getElementById('createAgentModal').style.display = 'none';
+            document.getElementById('agentName').value = '';
+            document.getElementById('agentEmail').value = '';
+            document.getElementById('agentKeyLimit').value = '10';
+        }
+
+        function showAgentCreatedModal(key) {
+            createdAgentKey = key;
+            document.getElementById('agentKeyDisplay').textContent = key;
+            document.getElementById('agentCreatedModal').style.display = 'block';
+        }
+
+        function hideAgentCreatedModal() {
+            document.getElementById('agentCreatedModal').style.display = 'none';
+        }
+
+        function editAgentKeyLimit(agentKey) {
+            editingAgentKey = agentKey;
+            
+            fetch(`${API_BASE}/admin/data`)
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    showResult(`Key creation limit updated to ${newLimit}`, 'success');
-                    loadStats();
-                } else {
-                    showResult(`Error: ${data.errorMessage}`, 'error');
+                const agentData = data.agents[agentKey];
+                if (agentData) {
+                    document.getElementById('newKeyLimit').value = agentData.key_limit;
+                    document.getElementById('editLimitModal').style.display = 'block';
                 }
-            })
-            .catch(error => {
-                showResult(`Network error: ${error.message}`, 'error');
+            });
+        }
+
+        function hideEditLimitModal() {
+            document.getElementById('editLimitModal').style.display = 'none';
+            document.getElementById('newKeyLimit').value = '';
+            editingAgentKey = '';
+        }
+
+        function editKeyDetails(key) {
+            editingKey = key;
+            
+            fetch(`${API_BASE}/admin/data`)
+            .then(response => response.json())
+            .then(data => {
+                const keyData = data.keys[key];
+                if (keyData) {
+                    document.getElementById('editKeyName').value = keyData.name;
+                    document.getElementById('editKeyEmail').value = keyData.email;
+                    document.getElementById('editKeyModal').style.display = 'block';
+                }
+            });
+        }
+
+        function hideEditKeyModal() {
+            document.getElementById('editKeyModal').style.display = 'none';
+            document.getElementById('editKeyName').value = '';
+            document.getElementById('editKeyEmail').value = '';
+            editingKey = '';
+        }
+
+        async function createAgent() {
+            const name = document.getElementById('agentName').value.trim();
+            const email = document.getElementById('agentEmail').value.trim();
+            const keyLimit = parseInt(document.getElementById('agentKeyLimit').value);
+
+            if (!name || !email || !keyLimit || keyLimit < 1) {
+                alert('Please fill in all fields with valid values');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/create-agent`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, email, key_limit: keyLimit })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    hideCreateAgentModal();
+                    showAgentCreatedModal(data.agent_key);
+                    loadAdminData();
+                } else {
+                    alert(`Error: ${data.errorMessage}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
+        }
+
+        async function updateKeyLimit() {
+            const newLimit = parseInt(document.getElementById('newKeyLimit').value);
+
+            if (!newLimit || newLimit < 1) {
+                alert('Please enter a valid limit');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/update-agent-limit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ agent_key: editingAgentKey, key_limit: newLimit })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    hideEditLimitModal();
+                    loadAdminData();
+                    alert('Key limit updated successfully!');
+                } else {
+                    alert(`Error: ${data.errorMessage}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
+        }
+
+        async function updateKeyDetails() {
+            const name = document.getElementById('editKeyName').value.trim();
+            const email = document.getElementById('editKeyEmail').value.trim();
+
+            if (!name || !email) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/edit-key`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        key: editingKey,
+                        name: name, 
+                        email: email 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    hideEditKeyModal();
+                    loadAdminData();
+                    alert('Key details updated successfully!');
+                } else {
+                    alert(`Error: ${data.errorMessage}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
+        }
+
+        async function removeUserAccessAdmin(username) {
+            if (!confirm(`Are you sure you want to remove access for ${username}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/remove-access/${encodeURIComponent(username)}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('Access removed successfully');
+                    loadAdminData();
+                } else {
+                    alert(`Error: ${data.errorMessage}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
+        }
+
+        function copyAgentKey() {
+            navigator.clipboard.writeText(createdAgentKey).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.background = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#28a745';
+                }, 2000);
+            });
+        }
+
+        function copyAgentKeyFromTable(key) {
+            navigator.clipboard.writeText(key).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        function copyActivationKey(key) {
+            navigator.clipboard.writeText(key).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
             });
         }
 
@@ -1363,10 +2365,183 @@ def admin():
                 resultDiv.style.display = 'none';
             }, 5000);
         }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modals = ['createAgentModal', 'agentCreatedModal', 'editLimitModal', 'editKeyModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
     </script>
 </body>
 </html>
   '''
+
+
+@app.route('/admin/data', methods=['GET'])
+def admin_data():
+  try:
+    return json.dumps({
+      'agents': agent_keys,
+      'keys': activation_keys,
+      'users': claimed_users
+    }), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/create-agent', methods=['POST'])
+def create_agent():
+  try:
+    jsonPayload = request.json
+    name = jsonPayload.get('name')
+    email = jsonPayload.get('email')
+    key_limit = jsonPayload.get('key_limit', 10)
+
+    if not name or not email:
+      return json.dumps({'errorMessage': 'Name and email are required'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Generate a secure random agent key
+    agent_key = secrets.token_urlsafe(32)
+
+    # Store agent data
+    agent_keys[agent_key] = {
+      'name': name,
+      'email': email,
+      'timestamp': time.time(),
+      'key_limit': key_limit,
+      'keys_generated': 0
+    }
+
+    return json.dumps({'agent_key': agent_key}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/update-agent-limit', methods=['POST'])
+def update_agent_limit():
+  try:
+    jsonPayload = request.json
+    agent_key = jsonPayload.get('agent_key')
+    key_limit = jsonPayload.get('key_limit')
+
+    if not agent_key or not key_limit or key_limit < 1:
+      return json.dumps({'errorMessage': 'Valid agent key and key limit are required'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    if agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Invalid agent key'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Update agent key limit
+    agent_keys[agent_key]['key_limit'] = key_limit
+
+    return json.dumps({'success': True}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/edit-key', methods=['POST'])
+def admin_edit_key():
+  try:
+    jsonPayload = request.json
+    key = jsonPayload.get('key')
+    name = jsonPayload.get('name')
+    email = jsonPayload.get('email')
+
+    if not key or not name or not email:
+      return json.dumps({'errorMessage': 'Key, name and email are required'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    if key not in activation_keys:
+      return json.dumps({'errorMessage': 'Invalid activation key'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Update key details
+    activation_keys[key]['name'] = name
+    activation_keys[key]['email'] = email
+
+    return json.dumps({'success': True}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/remove-access/<username>', methods=['DELETE'])
+def admin_remove_user_access(username):
+  try:
+    if username not in claimed_users:
+      return json.dumps({'errorMessage': 'User not found'}), 404, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Get the user's activation key before removing
+    user_data = claimed_users[username]
+    activation_key = user_data['key']
+
+    # Remove access using TradingView API
+    tv = tradingview()
+    pine_ids = ['PUB;2a98f89c2f96420a9bac21052e0c94cf']
+
+    for pine_id in pine_ids:
+      access = tv.get_access_details(username, pine_id)
+      if access['hasAccess']:
+        tv.remove_access(access)
+
+    # Mark the activation key as cancelled
+    if activation_key in activation_keys:
+      activation_keys[activation_key]['cancelled'] = True
+      agent_key = activation_keys[activation_key].get('agent_key')
+      
+      # Decrease the key generation count for the associated agent
+      if agent_key and agent_key in agent_keys:
+        if agent_keys[agent_key]['keys_generated'] > 0:
+          agent_keys[agent_key]['keys_generated'] -= 1
+
+    # Remove from claimed users
+    del claimed_users[username]
+
+    return json.dumps({'success': True, 'message': 'Access removed and key reset successfully'}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
 
 
 @app.route('/admin/login', methods=['POST'])
@@ -1859,14 +3034,6 @@ def main():
 </body>
 </html>
   '''
-
-
-# def run():
-#   app.run(host='0.0.0.0', port=5000)
-
-# def start_server_async():
-#   server = Thread(target=run)
-#   server.start()
 
 
 def start_server():
