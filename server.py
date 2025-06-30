@@ -1792,6 +1792,67 @@ def admin():
             opacity: 0.6;
             color: #6c757d;
         }
+
+        .agent-info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+
+        .agent-info-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+
+        .subsection {
+            margin-bottom: 40px;
+        }
+
+        .subsection h4 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 1px solid #e1e5e9;
+            padding-bottom: 10px;
+        }
+
+        .manage-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 5px;
+        }
+
+        .manage-btn:hover {
+            background: #138496;
+            transform: translateY(-1px);
+        }
+
+        .delete-agent-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .delete-agent-btn:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -1856,42 +1917,51 @@ def admin():
                 </div>
 
                 <div class="section">
-                    <h2 class="section-title">All Activation Keys</h2>
-                    <div class="table-container">
-                        <table id="allKeysTable">
-                            <thead>
-                                <tr>
-                                    <th>Key</th>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <th>Agent</th>
-                                    <th>Generated</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="allKeysTableBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                    <h2 class="section-title">Agent Details</h2>
+                    <div id="agentDetailsSection" style="display: none;">
+                        <div class="agent-info-header">
+                            <h3 id="selectedAgentName">Agent Name</h3>
+                            <button class="btn-cancel" onclick="hideAgentDetails()">← Back to Agents</button>
+                        </div>
+                        
+                        <div class="subsection">
+                            <h4>Activation Keys</h4>
+                            <div class="table-container">
+                                <table id="agentKeysTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Key</th>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Status</th>
+                                            <th>Generated</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agentKeysTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
 
-                <div class="section">
-                    <h2 class="section-title">All Claimed Users</h2>
-                    <div class="table-container">
-                        <table id="allUsersTable">
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Claimed Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="allUsersTableBody">
-                            </tbody>
-                        </table>
+                        <div class="subsection">
+                            <h4>Claimed Users</h4>
+                            <div class="table-container">
+                                <table id="agentUsersTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Claimed Date</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agentUsersTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2045,8 +2115,6 @@ def admin():
             .then(data => {
                 updateAdminStats(data);
                 updateAgentsTable(data.agents);
-                updateAllKeysTable(data.keys);
-                updateAllUsersTable(data.users);
             })
             .catch(error => {
                 console.error('Error loading admin data:', error);
@@ -2084,23 +2152,51 @@ def admin():
                     <td>${data.keys_generated}</td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
                     <td>
+                        <button class="manage-btn" onclick="showAgentDetails('${key}', '${data.name}')">Manage</button>
                         <button class="copy-btn" onclick="copyAgentKeyFromTable('${key}')">Copy Key</button>
                         <button class="edit-btn" onclick="editAgentKeyLimit('${key}')">Edit Limit</button>
+                        <button class="delete-agent-btn" onclick="deleteAgent('${key}', '${data.name}')">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(row);
             });
         }
 
-        function updateAllKeysTable(keys) {
-            const tbody = document.getElementById('allKeysTableBody');
+        let currentAgentKey = '';
+
+        function showAgentDetails(agentKey, agentName) {
+            currentAgentKey = agentKey;
+            document.getElementById('selectedAgentName').textContent = agentName;
+            document.getElementById('agentDetailsSection').style.display = 'block';
+            loadAgentSpecificData(agentKey);
+        }
+
+        function hideAgentDetails() {
+            document.getElementById('agentDetailsSection').style.display = 'none';
+            currentAgentKey = '';
+        }
+
+        function loadAgentSpecificData(agentKey) {
+            fetch(`${API_BASE}/admin/agent-data/${encodeURIComponent(agentKey)}`)
+            .then(response => response.json())
+            .then(data => {
+                updateAgentKeysTable(data.keys);
+                updateAgentUsersTable(data.users);
+            })
+            .catch(error => {
+                console.error('Error loading agent data:', error);
+            });
+        }
+
+        function updateAgentKeysTable(keys) {
+            const tbody = document.getElementById('agentKeysTableBody');
             tbody.innerHTML = '';
 
             if (Object.keys(keys).length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="7" style="text-align: center; padding: 40px; color: #999;">
-                            No activation keys generated yet
+                        <td colspan="6" style="text-align: center; padding: 40px; color: #999;">
+                            No activation keys generated by this agent
                         </td>
                     </tr>
                 `;
@@ -2129,7 +2225,6 @@ def admin():
                     <td class="${nameClass}">${data.name}</td>
                     <td class="${emailClass}">${data.email}</td>
                     <td><span class="status-${status}">${statusText}</span></td>
-                    <td><code>${(data.agent_key || 'N/A').substring(0, 8)}...</code></td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
                     <td>
                         <button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy</button>
@@ -2140,15 +2235,15 @@ def admin():
             });
         }
 
-        function updateAllUsersTable(users) {
-            const tbody = document.getElementById('allUsersTableBody');
+        function updateAgentUsersTable(users) {
+            const tbody = document.getElementById('agentUsersTableBody');
             tbody.innerHTML = '';
 
             if (Object.keys(users).length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
-                            No users have claimed access yet
+                            No users have claimed access through this agent
                         </td>
                     </tr>
                 `;
@@ -2166,6 +2261,32 @@ def admin():
                 `;
                 tbody.appendChild(row);
             });
+        }
+
+        async function deleteAgent(agentKey, agentName) {
+            if (!confirm(`Are you sure you want to delete agent "${agentName}"? This will also cancel all their activation keys and remove access for all their users.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/delete-agent/${encodeURIComponent(agentKey)}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('Agent deleted successfully');
+                    loadAdminData();
+                    if (currentAgentKey === agentKey) {
+                        hideAgentDetails();
+                    }
+                } else {
+                    alert(`Error: ${data.errorMessage}`);
+                }
+            } catch (error) {
+                alert(`Network error: ${error.message}`);
+            }
         }
 
         function showCreateAgentModal() {
@@ -2601,6 +2722,81 @@ def admin_remove_user_access(username):
     del claimed_users[username]
 
     return json.dumps({'success': True, 'message': 'Access removed and key reset successfully'}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/agent-data/<agent_key>', methods=['GET'])
+def admin_agent_data(agent_key):
+  try:
+    if agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Agent not found'}), 404, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Filter keys and users for this specific agent
+    agent_activation_keys = {k: v for k, v in activation_keys.items() if v.get('agent_key') == agent_key}
+    agent_users = {k: v for k, v in claimed_users.items() if v.get('key') in agent_activation_keys}
+    
+    return json.dumps({
+      'keys': agent_activation_keys,
+      'users': agent_users
+    }), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/delete-agent/<agent_key>', methods=['DELETE'])
+def admin_delete_agent(agent_key):
+  try:
+    if agent_key not in agent_keys:
+      return json.dumps({'errorMessage': 'Agent not found'}), 404, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+
+    # Get all activation keys for this agent
+    agent_activation_keys = [k for k, v in activation_keys.items() if v.get('agent_key') == agent_key]
+    
+    # Remove all claimed users that used keys from this agent
+    users_to_remove = []
+    for username, user_data in claimed_users.items():
+      if user_data.get('key') in agent_activation_keys:
+        users_to_remove.append(username)
+        
+        # Remove TradingView access for each user
+        try:
+          tv = tradingview()
+          pine_ids = ['PUB;2a98f89c2f96420a9bac21052e0c94cf']
+          for pine_id in pine_ids:
+            access = tv.get_access_details(username, pine_id)
+            if access['hasAccess']:
+              tv.remove_access(access)
+        except Exception as e:
+          print(f"[W] Failed to remove TradingView access for {username}: {e}")
+    
+    # Remove users from claimed_users
+    for username in users_to_remove:
+      del claimed_users[username]
+    
+    # Remove all activation keys for this agent
+    for key in agent_activation_keys:
+      del activation_keys[key]
+    
+    # Remove the agent
+    del agent_keys[agent_key]
+
+    return json.dumps({'success': True, 'message': f'Agent deleted successfully. Removed {len(agent_activation_keys)} keys and {len(users_to_remove)} users.'}), 200, {
       'Content-Type': 'application/json; charset=utf-8'
     }
 
