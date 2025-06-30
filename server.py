@@ -278,6 +278,35 @@ def agent():
             font-weight: 600;
         }
         
+        .status-cancelled {
+            background: #fff3cd;
+            color: #856404;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .cancelled-key {
+            text-decoration: line-through;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+        
+        .cancelled-name {
+            text-decoration: line-through;
+            opacity: 0.6;
+            color: #6c757d;
+            transition: all 0.3s ease;
+        }
+        
+        .cancelled-email {
+            text-decoration: line-through;
+            opacity: 0.6;
+            color: #6c757d;
+            transition: all 0.3s ease;
+        }
+        
         .remove-btn {
             background: #dc3545;
             color: white;
@@ -561,15 +590,22 @@ def agent():
         
         function updateStats(data) {
             document.getElementById('totalKeys').textContent = Object.keys(data.keys).length;
-            document.getElementById('activeKeys').textContent = Object.values(data.keys).filter(k => !k.used).length;
+            document.getElementById('activeKeys').textContent = Object.values(data.keys).filter(k => !k.used && !k.cancelled).length;
             document.getElementById('claimedUsers').textContent = Object.keys(data.users).length;
             
             // Update the stats display to show limit information
             const statsContainer = document.querySelector('.stats');
             const limitCard = document.createElement('div');
             limitCard.className = 'stat-card';
+            
+            // Calculate remaining keys excluding cancelled ones
+            const totalKeys = Object.keys(data.keys).length;
+            const cancelledKeys = Object.values(data.keys).filter(k => k.cancelled).length;
+            const usedKeys = Object.values(data.keys).filter(k => k.used && !k.cancelled).length;
+            const remainingKeys = data.key_limit - (totalKeys - cancelledKeys);
+            
             limitCard.innerHTML = `
-                <div class="stat-number">${data.remaining_keys || 0}</div>
+                <div class="stat-number">${Math.max(0, remainingKeys)}</div>
                 <div class="stat-label">Keys Remaining</div>
             `;
             
@@ -630,11 +666,26 @@ def agent():
             
             Object.entries(keys).forEach(([key, data]) => {
                 const row = document.createElement('tr');
+                let status = 'active';
+                let statusText = 'Active';
+                
+                if (data.used) {
+                    status = 'used';
+                    statusText = 'Used';
+                } else if (data.cancelled) {
+                    status = 'cancelled';
+                    statusText = 'Cancelled';
+                }
+                
+                const keyClass = data.cancelled ? 'cancelled-key' : '';
+                const nameClass = data.cancelled ? 'cancelled-name' : '';
+                const emailClass = data.cancelled ? 'cancelled-email' : '';
+                
                 row.innerHTML = `
-                    <td><code>${key.substring(0, 12)}...</code></td>
-                    <td>${data.name}</td>
-                    <td>${data.email}</td>
-                    <td><span class="status-${data.used ? 'used' : 'active'}">${data.used ? 'Used' : 'Active'}</span></td>
+                    <td><code class="${keyClass}">${key.substring(0, 12)}...</code></td>
+                    <td class="${nameClass}">${data.name}</td>
+                    <td class="${emailClass}">${data.email}</td>
+                    <td><span class="status-${status}">${statusText}</span></td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
                 `;
                 tbody.appendChild(row);
@@ -856,7 +907,8 @@ def generate_key():
       'name': name,
       'email': email,
       'timestamp': time.time(),
-      'used': False
+      'used': False,
+      'cancelled': False
     }
     
     # Increment key generation count
@@ -896,9 +948,9 @@ def remove_user_access(username):
       if access['hasAccess']:
         tv.remove_access(access)
     
-    # Reset the activation key - mark it as unused so it can be used again
+    # Mark the activation key as cancelled instead of resetting it
     if activation_key in activation_keys:
-      activation_keys[activation_key]['used'] = False
+      activation_keys[activation_key]['cancelled'] = True
     
     # Remove from claimed users
     del claimed_users[username]
@@ -929,6 +981,11 @@ def validate_key(key):
     key_data = activation_keys[key]
     if key_data['used']:
       return json.dumps({'valid': False, 'message': 'Activation key already used'}), 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    
+    if key_data.get('cancelled', False):
+      return json.dumps({'valid': False, 'message': 'Activation key has been cancelled'}), 200, {
         'Content-Type': 'application/json; charset=utf-8'
       }
     
