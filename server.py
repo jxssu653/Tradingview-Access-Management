@@ -78,156 +78,258 @@ def main():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TradingView Access Management</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-        input[type="text"], textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
+        * {
+            margin: 0;
+            padding: 0;
             box-sizing: border-box;
         }
-        textarea {
-            height: 100px;
-            resize: vertical;
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-right: 10px;
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+            animation: slideUp 0.6s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        h1 {
+            color: #333;
             margin-bottom: 10px;
+            font-size: 28px;
+            font-weight: 700;
         }
-        button:hover {
-            background-color: #45a049;
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 16px;
         }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
+        
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
         }
-        .validate-btn {
-            background-color: #2196F3;
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
         }
-        .validate-btn:hover {
-            background-color: #0b7dda;
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
         }
-        .result {
-            margin-top: 20px;
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .button-container {
+            margin-top: 30px;
+        }
+        
+        button {
+            width: 100%;
             padding: 15px;
-            border-radius: 5px;
-            white-space: pre-wrap;
-            font-family: monospace;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .success {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
+        
+        .validate-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: none;
         }
-        .error {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
+        
+        .validate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
-        .info {
-            background-color: #d1ecf1;
-            border: 1px solid #bee5eb;
-            color: #0c5460;
+        
+        .claim-btn {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+            display: none;
         }
+        
+        .claim-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(86, 171, 47, 0.3);
+        }
+        
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
         .loading {
             display: none;
-            text-align: center;
-            color: #666;
+            margin-top: 20px;
+            color: #667eea;
+            font-weight: 600;
         }
-        .pine-ids-help {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result {
+            margin-top: 25px;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            display: none;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .user-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            display: none;
+            text-align: left;
+        }
+        
+        .user-info strong {
+            color: #667eea;
+        }
+        
+        .input-hint {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .form-group {
+            position: relative;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>TradingView Access Management</h1>
+        <h1>TradingView Access</h1>
+        <p class="subtitle">Manage script access for users</p>
         
         <div class="form-group">
-            <label for="username">Username:</label>
-            <input type="text" id="username" placeholder="Enter TradingView username">
+            <label for="username">TradingView Username</label>
+            <input type="text" id="username" placeholder="Enter username to validate">
+            <span class="input-hint" id="inputHint">Enter username</span>
         </div>
         
-        <div class="form-group">
-            <label for="pineIds">Pine IDs (for access operations):</label>
-            <textarea id="pineIds" placeholder='Enter Pine IDs, one per line or as JSON array:
-PUB;a34266bd1a4f46c4a6b541b7922c026c
-PUB;another_id_here
-
-OR
-
-["PUB;a34266bd1a4f46c4a6b541b7922c026c", "PUB;another_id_here"]'></textarea>
-            <div class="pine-ids-help">
-                Pine IDs can be found in browser developer console when accessing scripts on TradingView.
-            </div>
+        <div class="button-container">
+            <button type="button" class="validate-btn" id="validateBtn" onclick="validateUsername()">
+                Validate User
+            </button>
+            <button type="button" class="claim-btn" id="claimBtn" onclick="claimAccess()">
+                Claim Access
+            </button>
         </div>
         
-        <div class="form-group">
-            <label for="duration">Access Duration (for granting access):</label>
-            <input type="text" id="duration" placeholder="e.g., 1M, 3M, 6M, 1Y, L" value="L" list="duration-options">
-            <datalist id="duration-options">
-                <option value="L">Lifetime</option>
-                <option value="1M">1 Month</option>
-                <option value="3M">3 Months</option>
-                <option value="6M">6 Months</option>
-                <option value="1Y">1 Year</option>
-                <option value="2Y">2 Years</option>
-                <option value="1W">1 Week</option>
-                <option value="30D">30 Days</option>
-            </datalist>
-            <div class="pine-ids-help">
-                Common options: <strong>L</strong> (Lifetime), 1M (1 Month), 3M (3 Months), 6M (6 Months), 1Y (1 Year)<br>
-                Format: Number + Letter (M=Month, Y=Year, W=Week, D=Day) or <strong>L</strong> for Lifetime
-            </div>
+        <div class="loading" id="loading">
+            <span class="spinner"></span>
+            Processing...
         </div>
         
-        <button type="button" class="validate-btn" onclick="validateUsername()">Validate Username</button>
-        <button type="button" onclick="checkAccess()">Check Current Access</button>
-        <button type="button" onclick="grantAccess()">Grant Access</button>
-        <button type="button" onclick="removeAccess()">Remove Access</button>
+        <div class="user-info" id="userInfo">
+            <strong>Verified User:</strong> <span id="verifiedUsername"></span>
+        </div>
         
-        <div class="loading" id="loading">Processing...</div>
-        <div id="result"></div>
+        <div id="result" class="result"></div>
     </div>
 
     <script>
         const API_BASE = window.location.origin;
+        let validatedUsername = null;
+        
+        // Show validate button when username is entered
+        document.getElementById('username').addEventListener('input', function() {
+            const username = this.value.trim();
+            const validateBtn = document.getElementById('validateBtn');
+            const claimBtn = document.getElementById('claimBtn');
+            
+            if (username) {
+                validateBtn.style.display = 'block';
+                claimBtn.style.display = 'none';
+                validatedUsername = null;
+                document.getElementById('userInfo').style.display = 'none';
+                document.getElementById('result').style.display = 'none';
+            } else {
+                validateBtn.style.display = 'none';
+                claimBtn.style.display = 'none';
+            }
+        });
         
         function showLoading(show) {
             document.getElementById('loading').style.display = show ? 'block' : 'none';
@@ -237,54 +339,41 @@ OR
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = message;
             resultDiv.className = `result ${type}`;
-        }
-        
-        function getUsername() {
-            const username = document.getElementById('username').value.trim();
-            if (!username) {
-                showResult('Please enter a username', 'error');
-                return null;
-            }
-            return username;
-        }
-        
-        function getPineIds() {
-            const pineIdsText = document.getElementById('pineIds').value.trim();
-            if (!pineIdsText) {
-                return [];
-            }
-            
-            try {
-                // Try to parse as JSON first
-                if (pineIdsText.startsWith('[') && pineIdsText.endsWith(']')) {
-                    return JSON.parse(pineIdsText);
-                }
-                
-                // Otherwise split by lines and filter empty lines
-                return pineIdsText.split('\\n').map(id => id.trim()).filter(id => id.length > 0);
-            } catch (e) {
-                showResult('Invalid Pine IDs format. Please use one ID per line or valid JSON array.', 'error');
-                return null;
-            }
+            resultDiv.style.display = 'block';
         }
         
         async function validateUsername() {
-            const username = getUsername();
-            if (!username) return;
+            const username = document.getElementById('username').value.trim();
+            if (!username) {
+                showResult('Please enter a username', 'error');
+                return;
+            }
             
             showLoading(true);
+            document.getElementById('result').style.display = 'none';
+            
             try {
                 const response = await fetch(`${API_BASE}/validate/${encodeURIComponent(username)}`);
                 const data = await response.json();
                 
                 if (response.ok) {
                     if (data.validuser) {
-                        showResult(`✅ Valid username: ${data.verifiedUserName}`, 'success');
+                        validatedUsername = data.verifiedUserName;
+                        
+                        // Hide validate button, show claim button
+                        document.getElementById('validateBtn').style.display = 'none';
+                        document.getElementById('claimBtn').style.display = 'block';
+                        
+                        // Show user info
+                        document.getElementById('verifiedUsername').textContent = data.verifiedUserName;
+                        document.getElementById('userInfo').style.display = 'block';
+                        
+                        showResult(`✅ Username validated successfully!`, 'success');
                     } else {
-                        showResult('❌ Invalid username', 'error');
+                        showResult('❌ Invalid username. Please check and try again.', 'error');
                     }
                 } else {
-                    showResult(`Error: ${data.errorMessage || 'Unknown error'}`, 'error');
+                    showResult(`Error: ${data.errorMessage || 'Validation failed'}`, 'error');
                 }
             } catch (error) {
                 showResult(`Network error: ${error.message}`, 'error');
@@ -293,54 +382,21 @@ OR
             }
         }
         
-        async function checkAccess() {
-            const username = getUsername();
-            const pineIds = getPineIds();
-            if (!username || pineIds === null) return;
-            
-            if (pineIds.length === 0) {
-                showResult('Please enter at least one Pine ID to check access', 'error');
+        async function claimAccess() {
+            if (!validatedUsername) {
+                showResult('Please validate username first', 'error');
                 return;
             }
             
-            showLoading(true);
-            try {
-                const response = await fetch(`${API_BASE}/access/${encodeURIComponent(username)}`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ pine_ids: pineIds })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showResult(`Current Access Status:\\n${JSON.stringify(data, null, 2)}`, 'info');
-                } else {
-                    showResult(`Error: ${data.errorMessage || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                showResult(`Network error: ${error.message}`, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-        
-        async function grantAccess() {
-            const username = getUsername();
-            const pineIds = getPineIds();
-            const duration = document.getElementById('duration').value.trim() || '1M';
-            if (!username || pineIds === null) return;
-            
-            if (pineIds.length === 0) {
-                showResult('Please enter at least one Pine ID to grant access', 'error');
-                return;
-            }
+            // Hardcoded Pine IDs for the claim access functionality
+            const pineIds = ['PUB;a34266bd1a4f46c4a6b541b7922c026c'];
+            const duration = 'L'; // Lifetime access
             
             showLoading(true);
+            document.getElementById('result').style.display = 'none';
+            
             try {
-                const response = await fetch(`${API_BASE}/access/${encodeURIComponent(username)}`, {
+                const response = await fetch(`${API_BASE}/access/${encodeURIComponent(validatedUsername)}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -351,47 +407,10 @@ OR
                 const data = await response.json();
                 
                 if (response.ok) {
-                    showResult(`✅ Access Grant Results:\\n${JSON.stringify(data, null, 2)}`, 'success');
+                    const successMessage = `🎉 Access granted successfully!\\n\\nUser: ${validatedUsername}\\nAccess Level: Lifetime\\nStatus: Active`;
+                    showResult(successMessage, 'success');
                 } else {
-                    showResult(`Error: ${data.errorMessage || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                showResult(`Network error: ${error.message}`, 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-        
-        async function removeAccess() {
-            const username = getUsername();
-            const pineIds = getPineIds();
-            if (!username || pineIds === null) return;
-            
-            if (pineIds.length === 0) {
-                showResult('Please enter at least one Pine ID to remove access', 'error');
-                return;
-            }
-            
-            if (!confirm(`Are you sure you want to remove access for user "${username}" from ${pineIds.length} script(s)?`)) {
-                return;
-            }
-            
-            showLoading(true);
-            try {
-                const response = await fetch(`${API_BASE}/access/${encodeURIComponent(username)}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ pine_ids: pineIds })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showResult(`✅ Access Removal Results:\\n${JSON.stringify(data, null, 2)}`, 'success');
-                } else {
-                    showResult(`Error: ${data.errorMessage || 'Unknown error'}`, 'error');
+                    showResult(`Error: ${data.errorMessage || 'Failed to grant access'}`, 'error');
                 }
             } catch (error) {
                 showResult(`Network error: ${error.message}`, 'error');
