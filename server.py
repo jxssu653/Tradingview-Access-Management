@@ -193,9 +193,20 @@ OR
         
         <div class="form-group">
             <label for="duration">Access Duration (for granting access):</label>
-            <input type="text" id="duration" placeholder="e.g., 1M (1 Month), 3M, 6M, 1Y, L (Lifetime)" value="1M">
+            <input type="text" id="duration" placeholder="e.g., 1M, 3M, 6M, 1Y, L" value="L" list="duration-options">
+            <datalist id="duration-options">
+                <option value="L">Lifetime</option>
+                <option value="1M">1 Month</option>
+                <option value="3M">3 Months</option>
+                <option value="6M">6 Months</option>
+                <option value="1Y">1 Year</option>
+                <option value="2Y">2 Years</option>
+                <option value="1W">1 Week</option>
+                <option value="30D">30 Days</option>
+            </datalist>
             <div class="pine-ids-help">
-                Format: Number + Letter (M=Month, Y=Year, W=Week, D=Day, L=Lifetime)
+                Common options: <strong>L</strong> (Lifetime), 1M (1 Month), 3M (3 Months), 6M (6 Months), 1Y (1 Year)<br>
+                Format: Number + Letter (M=Month, Y=Year, W=Week, D=Day) or <strong>L</strong> for Lifetime
             </div>
         </div>
         
