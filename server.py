@@ -459,6 +459,17 @@ def agent():
             font-size: 12px;
             cursor: pointer;
             margin-top: 10px;
+            transition: background 0.3s ease;
+        }
+
+        .copy-btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .copy-btn:hover:not(:disabled) {
+            background: #218838;
         }
     </style>
 </head>
@@ -499,6 +510,7 @@ def agent():
                                 <th>Email</th>
                                 <th>Status</th>
                                 <th>Generated</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="keysTableBody">
@@ -656,7 +668,7 @@ def agent():
             if (Object.keys(keys).length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
+                        <td colspan="6" style="text-align: center; padding: 40px; color: #999;">
                             No activation keys generated yet
                         </td>
                     </tr>
@@ -687,6 +699,7 @@ def agent():
                     <td class="${emailClass}">${data.email}</td>
                     <td><span class="status-${status}">${statusText}</span></td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
+                    <td><button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy Key</button></td>
                 `;
                 tbody.appendChild(row);
             });
@@ -816,6 +829,23 @@ def agent():
                     btn.textContent = originalText;
                     btn.style.background = '#28a745';
                 }, 2000);
+            });
+        }
+
+        function copyActivationKey(key) {
+            navigator.clipboard.writeText(key).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                const originalBackground = btn.style.background;
+                btn.style.background = '#28a745';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = originalBackground;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy key:', err);
+                alert('Failed to copy key to clipboard');
             });
         }
 
