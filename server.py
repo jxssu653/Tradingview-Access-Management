@@ -1036,33 +1036,67 @@ def agent():
         }
 
         function copyKey() {
-            navigator.clipboard.writeText(generatedKey).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                btn.style.background = '#28a745';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = '#28a745';
-                }, 2000);
-            });
+            copyToClipboard(generatedKey, event.target);
         }
 
         function copyActivationKey(key) {
-            navigator.clipboard.writeText(key).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                const originalBackground = btn.style.background;
-                btn.style.background = '#28a745';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = originalBackground;
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy key:', err);
-                alert('Failed to copy key to clipboard');
-            });
+            copyToClipboard(key, event.target);
+        }
+
+        function copyToClipboard(text, button) {
+            // Try modern clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopySuccess(button);
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopyTextToClipboard(text, button);
+                });
+            } else {
+                // Fallback for non-secure contexts
+                fallbackCopyTextToClipboard(text, button);
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text, button) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(button);
+                } else {
+                    showCopyError(button, text);
+                }
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                showCopyError(button, text);
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function showCopySuccess(button) {
+            const originalText = button.textContent;
+            const originalBackground = button.style.background;
+            button.textContent = 'Copied!';
+            button.style.background = '#28a745';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.background = originalBackground;
+            }, 2000);
+        }
+
+        function showCopyError(button, text) {
+            // Show the text in a prompt for manual copying
+            prompt('Copy this text manually:', text);
         }
 
         async function removeUserAccess(username) {
@@ -2321,38 +2355,71 @@ def admin():
         }
 
         function copyAgentKey() {
-            navigator.clipboard.writeText(createdAgentKey).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                btn.style.background = '#28a745';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = '#28a745';
-                }, 2000);
-            });
+            copyToClipboard(createdAgentKey, event.target);
         }
 
         function copyAgentKeyFromTable(key) {
-            navigator.clipboard.writeText(key).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
-            });
+            copyToClipboard(key, event.target);
         }
 
         function copyActivationKey(key) {
-            navigator.clipboard.writeText(key).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
-            });
+            copyToClipboard(key, event.target);
+        }
+
+        function copyToClipboard(text, button) {
+            // Try modern clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopySuccess(button);
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopyTextToClipboard(text, button);
+                });
+            } else {
+                // Fallback for non-secure contexts
+                fallbackCopyTextToClipboard(text, button);
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text, button) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(button);
+                } else {
+                    showCopyError(button, text);
+                }
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                showCopyError(button, text);
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function showCopySuccess(button) {
+            const originalText = button.textContent;
+            const originalBackground = button.style.background;
+            button.textContent = 'Copied!';
+            button.style.background = '#28a745';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.background = originalBackground;
+            }, 2000);
+        }
+
+        function showCopyError(button, text) {
+            // Show the text in a prompt for manual copying
+            prompt('Copy this text manually:', text);
         }
 
         function showResult(message, type = 'info') {
