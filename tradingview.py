@@ -1,5 +1,5 @@
 import os
-from replit import db
+from dotenv import load_dotenv
 import config
 import requests
 import platform
@@ -11,17 +11,24 @@ import helper
 class tradingview:
 
   def __init__(self):
-    print('Getting sessionid from db')
-    self.sessionid = db["sessionid"] if 'sessionid' in db.keys() else 'abcd'
+    # Load environment variables
+    load_dotenv()
+    
+    print('Getting sessionid from local storage')
+    try:
+      with open('session.txt', 'r') as f:
+        self.sessionid = f.read().strip()
+    except FileNotFoundError:
+      self.sessionid = 'abcd'
 
     headers = {'cookie': 'sessionid=' + self.sessionid}
     test = requests.request("GET", config.urls["tvcoins"], headers=headers)
     print(test.text)
-    print('sessionid from db : ' + self.sessionid)
+    print('sessionid from local storage : ' + self.sessionid)
     if test.status_code != 200:
-      print('session id from db is invalid')
-      username = os.environ['tvusername']
-      password = os.environ['tvpassword']
+      print('session id from local storage is invalid')
+      username = os.environ.get('tvusername')
+      password = os.environ.get('tvpassword')
 
       payload = {'username': username, 'password': password, 'remember': 'on'}
       body, contentType = encode_multipart_formdata(payload)
@@ -39,7 +46,8 @@ class tradingview:
                             headers=login_headers)
       cookies = login.cookies.get_dict()
       self.sessionid = cookies["sessionid"]
-      db["sessionid"] = self.sessionid
+      with open('session.txt', 'w') as f:
+        f.write(self.sessionid)
 
   def validate_username(self, username):
     users = requests.get(config.urls["username_hint"] + "?s=" + username)

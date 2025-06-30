@@ -4,7 +4,12 @@ import json
 import secrets
 import time
 from flask_cors import CORS
-#from threading import Thread
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
 app = Flask('')
 CORS(app)
 
@@ -3313,4 +3318,4 @@ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 
 
 def start_server():
-  app.run(host='0.0.0.0', port=5000)
+  app.run(host='0.0.0.0', port=5000, debug=True)
