@@ -12,6 +12,15 @@ CORS(app)
 activation_keys = {}  # {key: {email, name, timestamp, used}}
 claimed_users = {}   # {username: {name, email, key, timestamp}}
 
+# Admin configuration
+admin_config = {
+  'passcode': 'ABC1322',
+  'key_creation_limit': 10  # Default limit
+}
+
+# Track key generation count
+key_generation_count = 0
+
 
 @app.route('/validate/<username>', methods=['GET'])
 def validate(username):
@@ -554,6 +563,54 @@ def agent():
             document.getElementById('totalKeys').textContent = Object.keys(data.keys).length;
             document.getElementById('activeKeys').textContent = Object.values(data.keys).filter(k => !k.used).length;
             document.getElementById('claimedUsers').textContent = Object.keys(data.users).length;
+            
+            // Update the stats display to show limit information
+            const statsContainer = document.querySelector('.stats');
+            const limitCard = document.createElement('div');
+            limitCard.className = 'stat-card';
+            limitCard.innerHTML = `
+                <div class="stat-number">${data.remaining_keys || 0}</div>
+                <div class="stat-label">Keys Remaining</div>
+            `;
+            
+            // Remove existing limit card if present
+            const existingLimitCard = statsContainer.querySelector('.limit-card');
+            if (existingLimitCard) {
+                existingLimitCard.remove();
+            }
+            
+            limitCard.classList.add('limit-card');
+            statsContainer.appendChild(limitCard);
+            
+            // Show warning if close to limit
+            if (data.remaining_keys <= 2 && data.remaining_keys > 0) {
+                showLimitWarning(`Warning: Only ${data.remaining_keys} key(s) remaining!`);
+            }
+        }
+        
+        function showLimitWarning(message) {
+            const warning = document.createElement('div');
+            warning.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #fff3cd;
+                border-left: 4px solid #ffc107;
+                color: #856404;
+                padding: 15px;
+                border-radius: 8px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                z-index: 1000;
+                max-width: 300px;
+            `;
+            warning.textContent = message;
+            document.body.appendChild(warning);
+            
+            setTimeout(() => {
+                if (warning.parentNode) {
+                    warning.parentNode.removeChild(warning);
+                }
+            }, 5000);
         }
         
         function updateKeysTable(keys) {
@@ -657,7 +714,41 @@ def agent():
                     showKeyGeneratedModal(data.key);
                     loadData(); // Reload data
                 } else {
-                    alert(`Error: ${data.errorMessage}`);
+                    if (data.errorMessage && data.errorMessage.includes('limit reached')) {
+                        // Show limit reached alert
+                        const alertDiv = document.createElement('div');
+                        alertDiv.style.cssText = `
+                            position: fixed;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            background: #f8d7da;
+                            border: 2px solid #dc3545;
+                            color: #721c24;
+                            padding: 30px;
+                            border-radius: 12px;
+                            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                            z-index: 1001;
+                            max-width: 400px;
+                            text-align: center;
+                            font-weight: 600;
+                        `;
+                        alertDiv.innerHTML = `
+                            <h3 style="margin-bottom: 15px;">⚠️ Limit Reached</h3>
+                            <p style="margin-bottom: 20px;">${data.errorMessage}</p>
+                            <button onclick="this.parentNode.remove()" style="
+                                background: #dc3545;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                            ">Close</button>
+                        `;
+                        document.body.appendChild(alertDiv);
+                    } else {
+                        alert(`Error: ${data.errorMessage}`);
+                    }
                 }
             } catch (error) {
                 alert(`Network error: ${error.message}`);
@@ -723,7 +814,10 @@ def agent_data():
   try:
     return json.dumps({
       'keys': activation_keys,
-      'users': claimed_users
+      'users': claimed_users,
+      'key_limit': admin_config['key_creation_limit'],
+      'keys_generated': key_generation_count,
+      'remaining_keys': admin_config['key_creation_limit'] - key_generation_count
     }), 200, {
       'Content-Type': 'application/json; charset=utf-8'
     }
@@ -737,6 +831,14 @@ def agent_data():
 @app.route('/agent/generate-key', methods=['POST'])
 def generate_key():
   try:
+    global key_generation_count
+    
+    # Check if limit is reached
+    if key_generation_count >= admin_config['key_creation_limit']:
+      return json.dumps({'errorMessage': f'Key generation limit reached ({admin_config["key_creation_limit"]}). Contact admin for more keys.'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    
     jsonPayload = request.json
     name = jsonPayload.get('name')
     email = jsonPayload.get('email')
@@ -756,6 +858,9 @@ def generate_key():
       'timestamp': time.time(),
       'used': False
     }
+    
+    # Increment key generation count
+    key_generation_count += 1
     
     return json.dumps({'key': key}), 200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -814,6 +919,409 @@ def validate_key(key):
       }
     
     return json.dumps({'valid': True, 'name': key_data['name']}), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+    
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin')
+def admin():
+  return '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - TradingView Access</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .login-form {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .admin-panel {
+            display: none;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        input[type="text"], input[type="password"], input[type="number"] {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+        
+        input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .update-btn {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+            width: 100%;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .result {
+            margin-top: 25px;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            display: none;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+            float: right;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Admin Panel</h1>
+            <p>Manage key creation limits</p>
+        </div>
+        
+        <div class="content">
+            <!-- Login Form -->
+            <div class="login-form" id="loginForm">
+                <div class="form-group">
+                    <label for="passcode">Admin Passcode</label>
+                    <input type="password" id="passcode" placeholder="Enter admin passcode">
+                </div>
+                <button type="button" class="login-btn" onclick="login()">Login</button>
+            </div>
+            
+            <!-- Admin Panel -->
+            <div class="admin-panel" id="adminPanel">
+                <button type="button" class="logout-btn" onclick="logout()">Logout</button>
+                <div style="clear: both; margin-bottom: 30px;"></div>
+                
+                <div class="stats" id="stats">
+                    <div class="stat-card">
+                        <div class="stat-number" id="currentLimit">0</div>
+                        <div class="stat-label">Current Limit</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="keysGenerated">0</div>
+                        <div class="stat-label">Keys Generated</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="remainingKeys">0</div>
+                        <div class="stat-label">Remaining Keys</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newLimit">Set New Key Creation Limit</label>
+                    <input type="number" id="newLimit" placeholder="Enter new limit (e.g., 50)" min="1">
+                </div>
+                
+                <button type="button" class="update-btn" onclick="updateLimit()">Update Limit</button>
+            </div>
+            
+            <div id="result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // Check if already logged in
+        if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+            showAdminPanel();
+        }
+        
+        function login() {
+            const passcode = document.getElementById('passcode').value.trim();
+            
+            if (!passcode) {
+                showResult('Please enter the admin passcode', 'error');
+                return;
+            }
+            
+            fetch(`${API_BASE}/admin/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ passcode: passcode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    sessionStorage.setItem('adminLoggedIn', 'true');
+                    showAdminPanel();
+                    showResult('Login successful!', 'success');
+                } else {
+                    showResult('Invalid passcode', 'error');
+                }
+            })
+            .catch(error => {
+                showResult(`Network error: ${error.message}`, 'error');
+            });
+        }
+        
+        function logout() {
+            sessionStorage.removeItem('adminLoggedIn');
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('adminPanel').style.display = 'none';
+            document.getElementById('passcode').value = '';
+            showResult('Logged out successfully', 'success');
+        }
+        
+        function showAdminPanel() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            loadStats();
+        }
+        
+        function loadStats() {
+            fetch(`${API_BASE}/admin/stats`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('currentLimit').textContent = data.current_limit;
+                document.getElementById('keysGenerated').textContent = data.keys_generated;
+                document.getElementById('remainingKeys').textContent = data.remaining_keys;
+                document.getElementById('newLimit').value = data.current_limit;
+            })
+            .catch(error => {
+                console.error('Error loading stats:', error);
+            });
+        }
+        
+        function updateLimit() {
+            const newLimit = parseInt(document.getElementById('newLimit').value);
+            
+            if (!newLimit || newLimit < 1) {
+                showResult('Please enter a valid limit (minimum 1)', 'error');
+                return;
+            }
+            
+            fetch(`${API_BASE}/admin/update-limit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ limit: newLimit })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showResult(`Key creation limit updated to ${newLimit}`, 'success');
+                    loadStats();
+                } else {
+                    showResult(`Error: ${data.errorMessage}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult(`Network error: ${error.message}`, 'error');
+            });
+        }
+        
+        function showResult(message, type = 'info') {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+  '''
+
+
+@app.route('/admin/login', methods=['POST'])
+def admin_login():
+  try:
+    jsonPayload = request.json
+    passcode = jsonPayload.get('passcode')
+    
+    if passcode == admin_config['passcode']:
+      return json.dumps({'success': True}), 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    else:
+      return json.dumps({'success': False}), 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+      
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/stats', methods=['GET'])
+def admin_stats():
+  try:
+    return json.dumps({
+      'current_limit': admin_config['key_creation_limit'],
+      'keys_generated': key_generation_count,
+      'remaining_keys': admin_config['key_creation_limit'] - key_generation_count
+    }), 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+    
+  except Exception as e:
+    print("[X] Exception Occurred : ", e)
+    return json.dumps({'errorMessage': 'Unknown Exception Occurred'}), 500, {
+      'Content-Type': 'application/json; charset=utf-8'
+    }
+
+
+@app.route('/admin/update-limit', methods=['POST'])
+def admin_update_limit():
+  try:
+    jsonPayload = request.json
+    new_limit = jsonPayload.get('limit')
+    
+    if not isinstance(new_limit, int) or new_limit < 1:
+      return json.dumps({'success': False, 'errorMessage': 'Invalid limit value'}), 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      }
+    
+    admin_config['key_creation_limit'] = new_limit
+    
+    return json.dumps({'success': True}), 200, {
       'Content-Type': 'application/json; charset=utf-8'
     }
     
