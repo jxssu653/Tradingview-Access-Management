@@ -1,4 +1,3 @@
-
 from flask import Flask, request
 from tradingview import tradingview
 import json
@@ -315,6 +314,7 @@ def agent():
             width: 100%;
             border-collapse: collapse;
             background: white;
+            min-width: 800px;
         }
 
         th, td {
@@ -560,6 +560,12 @@ def agent():
             border-left: 4px solid #dc3545;
             color: #721c24;
         }
+
+        .actions-column {
+            display: flex;
+            gap: 5px;
+            justify-content: left;
+        }
     </style>
 </head>
 <body>
@@ -573,14 +579,14 @@ def agent():
         <div class="login-section" id="loginSection">
             <h2>Agent Access</h2>
             <p>Enter your agent key to access the management panel</p>
-            
+
             <div class="form-group">
                 <label for="agentKey">Agent Key</label>
                 <input type="password" id="agentKey" placeholder="Enter your agent key">
             </div>
-            
+
             <button class="login-btn" onclick="validateAgentKey()">Access Panel</button>
-            
+
             <div id="loginResult" class="result"></div>
         </div>
 
@@ -718,7 +724,7 @@ def agent():
 
         async function validateAgentKey() {
             const key = document.getElementById('agentKey').value.trim();
-            
+
             if (!key) {
                 showLoginResult('Please enter your agent key', 'error');
                 return;
@@ -848,7 +854,7 @@ def agent():
                     <td class="${emailClass}">${data.email}</td>
                     <td><span class="status-${status}">${statusText}</span></td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
-                    <td>
+                    <td class="actions-column">
                         <button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy</button>
                         <button class="edit-btn" onclick="editKeyDetails('${key}')">Edit</button>
                     </td>
@@ -907,7 +913,7 @@ def agent():
 
         function editKeyDetails(key) {
             editingKey = key;
-            
+
             // Get current key data
             fetch(`${API_BASE}/agent/data`, {
                 headers: {
@@ -1067,7 +1073,7 @@ def agent():
             document.body.appendChild(textArea);
             textArea.focus();
             textArea.select();
-            
+
             try {
                 const successful = document.execCommand('copy');
                 if (successful) {
@@ -1151,17 +1157,17 @@ def agent():
 def agent_data():
   try:
     agent_key = request.headers.get('Agent-Key')
-    
+
     if not agent_key or agent_key not in agent_keys:
       return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
         'Content-Type': 'application/json; charset=utf-8'
       }
 
     agent_info = agent_keys[agent_key]
-    
+
     # Filter keys for this agent
     agent_activation_keys = {k: v for k, v in activation_keys.items() if v.get('agent_key') == agent_key}
-    
+
     return json.dumps({
       'keys': agent_activation_keys,
       'users': claimed_users,
@@ -1182,14 +1188,14 @@ def agent_data():
 def generate_key():
   try:
     agent_key = request.headers.get('Agent-Key')
-    
+
     if not agent_key or agent_key not in agent_keys:
       return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
         'Content-Type': 'application/json; charset=utf-8'
       }
 
     agent_info = agent_keys[agent_key]
-    
+
     # Check if limit is reached for this agent
     if agent_info['keys_generated'] >= agent_info['key_limit']:
       return json.dumps({'errorMessage': f'Key generation limit reached ({agent_info["key_limit"]}). Contact admin for more keys.'}), 400, {
@@ -1236,7 +1242,7 @@ def generate_key():
 def edit_key():
   try:
     agent_key = request.headers.get('Agent-Key')
-    
+
     if not agent_key or agent_key not in agent_keys:
       return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1282,7 +1288,7 @@ def edit_key():
 def remove_user_access(username):
   try:
     agent_key = request.headers.get('Agent-Key')
-    
+
     if not agent_key or agent_key not in agent_keys:
       return json.dumps({'errorMessage': 'Invalid agent key'}), 401, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1658,6 +1664,7 @@ def admin():
 
         .remove-btn:hover {
             background: #c82333;
+            transform: translateY(-1px);
         }
 
         .modal {
@@ -1853,6 +1860,12 @@ def admin():
             background: #c82333;
             transform: translateY(-1px);
         }
+
+        .actions-column {
+            display: flex;
+            gap: 5px;
+            justify-content: left;
+        }
     </style>
 </head>
 <body>
@@ -1923,7 +1936,7 @@ def admin():
                             <h3 id="selectedAgentName">Agent Name</h3>
                             <button class="btn-cancel" onclick="hideAgentDetails()">← Back to Agents</button>
                         </div>
-                        
+
                         <div class="subsection">
                             <h4>Activation Keys</h4>
                             <div class="table-container">
@@ -2222,11 +2235,11 @@ def admin():
 
                 row.innerHTML = `
                     <td><code class="${keyClass}">${key.substring(0, 12)}...</code></td>
-                    <td class="${nameClass}">${data.name}</td>
-                    <td class="${emailClass}">${data.email}</td>
+                    <td>${nameClass}">${data.name}</td>
+                    <td>${emailClass}">${data.email}</td>
                     <td><span class="status-${status}">${statusText}</span></td>
                     <td>${new Date(data.timestamp * 1000).toLocaleDateString()}</td>
-                    <td>
+                    <td class="actions-column">
                         <button class="copy-btn" onclick="copyActivationKey('${key}')" ${data.cancelled ? 'disabled' : ''}>Copy</button>
                         <button class="edit-btn" onclick="editKeyDetails('${key}')">Edit</button>
                     </td>
@@ -2312,7 +2325,7 @@ def admin():
 
         function editAgentKeyLimit(agentKey) {
             editingAgentKey = agentKey;
-            
+
             fetch(`${API_BASE}/admin/data`)
             .then(response => response.json())
             .then(data => {
@@ -2332,7 +2345,7 @@ def admin():
 
         function editKeyDetails(key) {
             editingKey = key;
-            
+
             fetch(`${API_BASE}/admin/data`)
             .then(response => response.json())
             .then(data => {
@@ -2511,7 +2524,7 @@ def admin():
             document.body.appendChild(textArea);
             textArea.focus();
             textArea.select();
-            
+
             try {
                 const successful = document.execCommand('copy');
                 if (successful) {
@@ -2712,7 +2725,7 @@ def admin_remove_user_access(username):
     if activation_key in activation_keys:
       activation_keys[activation_key]['cancelled'] = True
       agent_key = activation_keys[activation_key].get('agent_key')
-      
+
       # Decrease the key generation count for the associated agent
       if agent_key and agent_key in agent_keys:
         if agent_keys[agent_key]['keys_generated'] > 0:
@@ -2743,7 +2756,7 @@ def admin_agent_data(agent_key):
     # Filter keys and users for this specific agent
     agent_activation_keys = {k: v for k, v in activation_keys.items() if v.get('agent_key') == agent_key}
     agent_users = {k: v for k, v in claimed_users.items() if v.get('key') in agent_activation_keys}
-    
+
     return json.dumps({
       'keys': agent_activation_keys,
       'users': agent_users
@@ -2767,13 +2780,13 @@ def admin_delete_agent(agent_key):
 
     # Get all activation keys for this agent
     agent_activation_keys = [k for k, v in activation_keys.items() if v.get('agent_key') == agent_key]
-    
+
     # Remove all claimed users that used keys from this agent
     users_to_remove = []
     for username, user_data in claimed_users.items():
       if user_data.get('key') in agent_activation_keys:
         users_to_remove.append(username)
-        
+
         # Remove TradingView access for each user
         try:
           tv = tradingview()
@@ -2784,15 +2797,15 @@ def admin_delete_agent(agent_key):
               tv.remove_access(access)
         except Exception as e:
           print(f"[W] Failed to remove TradingView access for {username}: {e}")
-    
+
     # Remove users from claimed_users
     for username in users_to_remove:
       del claimed_users[username]
-    
+
     # Remove all activation keys for this agent
     for key in agent_activation_keys:
       del activation_keys[key]
-    
+
     # Remove the agent
     del agent_keys[agent_key]
 
@@ -2889,7 +2902,7 @@ def main():
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
