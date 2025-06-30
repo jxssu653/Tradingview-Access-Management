@@ -38,7 +38,9 @@ def access(username):
       accessList = accessList + [access]
 
     if request.method == 'POST':
-      duration = jsonPayload.get('duration')
+      duration = jsonPayload.get('duration', '1M')  # Default to 1 month if not provided
+      if not duration:
+        duration = '1M'
       dNumber = int(duration[:-1])
       dType = duration[-1:]
       for access in accessList:
@@ -189,6 +191,14 @@ OR
             </div>
         </div>
         
+        <div class="form-group">
+            <label for="duration">Access Duration (for granting access):</label>
+            <input type="text" id="duration" placeholder="e.g., 1M (1 Month), 3M, 6M, 1Y, L (Lifetime)" value="1M">
+            <div class="pine-ids-help">
+                Format: Number + Letter (M=Month, Y=Year, W=Week, D=Day, L=Lifetime)
+            </div>
+        </div>
+        
         <button type="button" class="validate-btn" onclick="validateUsername()">Validate Username</button>
         <button type="button" onclick="checkAccess()">Check Current Access</button>
         <button type="button" onclick="grantAccess()">Grant Access</button>
@@ -302,6 +312,7 @@ OR
         async function grantAccess() {
             const username = getUsername();
             const pineIds = getPineIds();
+            const duration = document.getElementById('duration').value.trim() || '1M';
             if (!username || pineIds === null) return;
             
             if (pineIds.length === 0) {
@@ -316,7 +327,7 @@ OR
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ pine_ids: pineIds })
+                    body: JSON.stringify({ pine_ids: pineIds, duration: duration })
                 });
                 
                 const data = await response.json();
