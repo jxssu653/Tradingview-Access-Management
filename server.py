@@ -41,8 +41,15 @@ def access(username):
       duration = jsonPayload.get('duration', '1M')  # Default to 1 month if not provided
       if not duration:
         duration = '1M'
-      dNumber = int(duration[:-1])
-      dType = duration[-1:]
+      
+      # Handle lifetime access (L) separately
+      if duration.upper() == 'L':
+        dType = 'L'
+        dNumber = 0  # Not used for lifetime
+      else:
+        dNumber = int(duration[:-1])
+        dType = duration[-1:]
+      
       for access in accessList:
         tv.add_access(access, dType, dNumber)
 
