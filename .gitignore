@@ -1,10 +1,6 @@
-
-.env
-session.txt
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-*.db
+.env
+.vscode/
+*.log
 *.sqlite3
